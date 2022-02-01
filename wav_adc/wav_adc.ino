@@ -1,4 +1,3 @@
-<<<<<<< HEAD:wav_adc/wav_adc.ino
 #include <SPI.h>
 #include <SD.h>
 #include <ADC.h>
@@ -187,5 +186,3 @@ void adc0_isr(void){ //interrupt for when a adc read is available
 //    }
 //  //Serial.println("ADC conversion complete");
   }
-
->>>>>>> 2d8b4d0f39934fdba52054673b27fe86c57033bb:wav_adc.ino
