@@ -51,7 +51,7 @@ uint32_t subChunk2Size = 0; // You Don't know this until you write your data
 void setup()
 {
 
-  pinMode(readPin, INPUT);
+  pinMode(readPin, INPUT);//NEED TO CHANGE FOR CDR, see data sheet for setting up io
   Serial.begin(9600);
   while (!Serial);
 
@@ -99,7 +99,7 @@ void loop(){
       exit(0);
     }
     
-    
+   
 }
 
 void writeWavHeader(){
