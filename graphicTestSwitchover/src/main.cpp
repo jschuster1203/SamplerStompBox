@@ -23,7 +23,6 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 // If using the breakout, change pins as desired
 //Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 int main(){
-  Serial.begin(9600);
    
   IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_07 = 5; //set pin 33 to GPIO mode
   IOMUXC_SW_PAD_CTL_PAD_GPIO_EMC_07 = IOMUXC_PAD_DSE(7) | IOMUXC_PAD_PKE | IOMUXC_PAD_PUE | IOMUXC_PAD_PUS(3) | IOMUXC_PAD_HYS; //settings for input pullup
@@ -31,11 +30,11 @@ int main(){
   GPIO9_GDIR &= ~(1<<7);//GPIO9_IO7 set to input (might be wrong)
   
 
-  if (!SD.begin(chipSelect)) {
-    Serial.println("initialization failed!");
+  if (!SD.begin(chipSelect)) { //SD card not in slot
+    //printf("SD card initialization failed");
     return -1;
   }
-  Serial.println("initialization done.");
+
 
   root = SD.open("/"); //open root of sd card
 
@@ -45,17 +44,15 @@ int main(){
     curSample.close();
     curSample = root.openNextFile();
     }
-  Serial.println(curSample.name());
   nextSample = root.openNextFile();
   while(nextSample.isDirectory()) //loop until an actual sample is found, not a directory
   {
     nextSample.close();
     nextSample = root.openNextFile();
     }
-  Serial.println(nextSample.name());
   
-  Serial.println("ILI9341 Test!");
-  tft.begin();
+
+  tft.begin(); //start the display
   tft.fillScreen(ILI9341_BLACK); 
   tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);  // White on black
   tft.setTextWrap(false);  // Don't wrap text to next line
@@ -73,10 +70,9 @@ int main(){
     GPIO9_DR_CLEAR = (1<<7);//clears the bit in the DR register
 
     clicked = (GPIO9_DR >> 7) & 1; ////create bit mask for just GPIO4_IO3
-    //Serial.println(clicked);
     if (clicked == 0){ //want this value to be 0 (LOW)
       sampleSelect();//if the button is being pressed, go to sample select
-      //Serial.println("Clicked");
+      
     }
 
   }
@@ -123,11 +119,7 @@ void testText() {
   tft.setTextSize(3);
   tft.println("Next Sample:");
   tft.setTextSize(4);
-//  File nextEntry = dir.openNextFile();
-//  if (nextEntry.isDirectory()){
-//    nextEntry.close();
-//    nextEntry = dir.openNextFile();
-//    }
+
   String nextEntry = nextSample.name();
   nextEntry = nextEntry.remove(nextEntry.length()-4, 4);//remove .txt, .wav, etc
    if (nextEntry.length() < 7){ //if sample is less than 7 characters, can fit on one line, no need to scroll
@@ -149,10 +141,8 @@ void testText() {
 
 }
 
-void sampleSelect(){ //ISR for sample select button pressed
-  Serial.println("Entered sampleSelect ISR");
+void sampleSelect(){ //sample select button pressed
   curSample = nextSample; //current sample becomes next sample
-  Serial.println(curSample.name());
   nextSample = root.openNextFile();
   if(!nextSample){
     root.rewindDirectory(); //go back to first file in directory
@@ -162,7 +152,7 @@ void sampleSelect(){ //ISR for sample select button pressed
     nextSample.close();
     nextSample = root.openNextFile();
     }
-  Serial.println(nextSample.name());
-  delay(500);//prevent rollover
+
+  delay(500);//prevent rollover/multiple button presses registered from one intended press 
   testText(); //run display function with updated info
   }
