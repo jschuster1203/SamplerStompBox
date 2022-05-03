@@ -57,8 +57,8 @@ int main(){
   IOMUXC_SW_PAD_CTL_PAD_GPIO_B1_12 = IOMUXC_PAD_PUS(3) | IOMUXC_PAD_PUE | IOMUXC_PAD_PKE | IOMUXC_PAD_DSE(7) | IOMUXC_PAD_HYS;
   GPIO7_GDIR &= ~(1<<28);//set pin 35 to input
 
-  IOMUXC_SW_MUX_CTL_PAD_GPIO_B1_02 = 5;//set pin 36 to GPIO mode(sample record)
-  IOMUXC_SW_PAD_CTL_PAD_GPIO_B1_02 = IOMUXC_PAD_PUS(3) | IOMUXC_PAD_PUE | IOMUXC_PAD_PKE | IOMUXC_PAD_DSE(7) | IOMUXC_PAD_HYS;
+  IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_05 = 5;//set pin 3 to GPIO mode(sample record)
+  IOMUXC_SW_PAD_CTL_PAD_GPIO_EMC_05 = IOMUXC_PAD_PUS(3) | IOMUXC_PAD_PUE | IOMUXC_PAD_PKE | IOMUXC_PAD_DSE(7) | IOMUXC_PAD_HYS;
   GPIO7_GDIR &= ~(1<<18);//set pin 36 to input
 
   /////////////// END OF INITIALIZING BUTTONS ///////////////////////////////
@@ -146,18 +146,18 @@ int main(){
   uint32_t recallPrevClicked = (GPIO7_DR >> 28) & 1;//previous state of recall sample button
 
   uint32_t recordClicked;//record sample button state
-  uint32_t recordPrevClicked = (GPIO7_DR >> 18) & 1;//previous state of record button
+  uint32_t recordPrevClicked = (GPIO9_DR >> 5) & 1;//previous state of record button
 
   while(1){
     GPIO9_DR_CLEAR = (1<<7);//clears the bit in the DR register
     GPIO7_DR_CLEAR = (1<<29);
     GPIO7_DR_CLEAR = (1<<28);
-    GPIO7_DR_CLEAR = (1<<18);
+    GPIO9_DR_CLEAR = (1<<5);
 
     nextclicked = (GPIO9_DR >> 7) & 1; //get current value of each of the buttons
     prevclicked = (GPIO7_DR >> 29) & 1;
     recallClicked = (GPIO7_DR >> 28) & 1;
-    recordClicked = (GPIO7_DR >> 18) & 1;
+    recordClicked = (GPIO9_DR >> 5) & 1;
 
     if (nextclicked != nextprevClicked){ //transition from high to low or vise versa(button pressed)
       //Serial.println("clicked");
@@ -251,6 +251,14 @@ void displayText() {//function used to display current and previous sample on th
 
 }
 
+
+
+
+
+
+
+
+
 void sampleSelect(){ //ISR for sample select button pressed
   
   curSample = nextSample; //current sample becomes next sample
@@ -320,6 +328,15 @@ void prevSampleSelect(){//called when previous sample button is pressed
   displayText();
 
 }
+
+
+
+
+
+
+
+
+
 
 void sampleRecall(){
   File datafile; //the file that will be read from
@@ -413,7 +430,7 @@ void sampleRecall(){
    
     firstRead = datafile.read();
     secondRead = datafile.read();
-    delayMicroseconds(26); // DELAY HERE to match sampling rate. 25.641025641026  for 39kHz
+    //delayMicroseconds(26); // DELAY HERE to match sampling rate. 25.641025641026  for 39kHz
 
   //Serial.println("Done");
   }
@@ -426,17 +443,28 @@ void sampleRecall(){
   tft.setCursor(0,0);//set point to top left 
   tft.println("Done    Playing:");
   tft.println(curSample.name());
-  delay(2000);
+  delay(1000);
   sampleSelect();//move on to next file in order
   displayText();
   
 }
 
+
+
+
+
+
+
+
+
+
+
 void sampleRecord(){
   delay(500);
-  uint16_t databits;//data from the ADC to be saved
+  uint16_t databits;//data from the ADC to be saved, unsigned value
   uint32_t convcount = 0;//used to count the number of conversions
   unsigned long dataSize;
+  int16_t signedDatabits;
 
 ///////////////// WAV FILE HEADER INFO ////////////////////
   /// The first 4 byte of a wav file should be the characters "RIFF" */
@@ -454,9 +482,9 @@ void sampleRecord(){
   ///: Mono = 1, Stereo = 2, etc.
   uint16_t numChannels = 1;
   ///: Sample Rate of file
-  uint32_t sampleRates = 38940; 
+  uint32_t sampleRates = 40000; 
   ///: SampleRate * NumChannels * BitsPerSample/8
-  uint32_t byteRate = 77880; //samplerates*2
+  uint32_t byteRate = 80000; //samplerates*2
   ///: The number of byte for one frame NumChannels * BitsPerSample/8
   uint16_t blockAlign = 2;
   ///: 8 bits = 8, 16 bits = 16
@@ -479,7 +507,7 @@ void sampleRecord(){
   tft.println("Please    wait");
 
   uint32_t recordFuncClicked;//record sample button state
-  uint32_t recordFuncPrevClicked = (GPIO7_DR >> 18) & 1;//previous state of record button
+  uint32_t recordFuncPrevClicked = (GPIO9_DR >> 5) & 1;//previous state of record button
 
 
   String fileNameWhole = fileNameStart + filesCreated + ".wav"; //creates a string of an incrementing name that will be used as the file name
@@ -487,34 +515,43 @@ void sampleRecord(){
   //Serial.println(fileName);
   filesCreated = filesCreated +1;//increment the file name number
 
+  if(!SD.exists(fileName)){//the file being created doesnt already exist in the SD card so need to increment the total number of files
+    totFiles = totFiles + 1;
+  }
+
   File wavFile = SD.open(fileName, FILE_WRITE);
 
   Wire.begin();//begin wire with slave address of ADC
+  
   Wire.setClock(1000000);
 
   Wire.beginTransmission(0b0110111);//begin transmission with ADC
   Wire.write(0x08);
   Wire.endTransmission();//may be able to not transmit this false
+  
+  
 
   Wire.requestFrom(0b0110111, 2,false);
   if(Wire.available() >= 2){ //check for all samples to be there, see if it reloads itself after running out of data, request read once?
     databits = Wire.read(); //inside while loop, check how many bytes in buffer?
     databits = databits << 8;
     databits |= Wire.read();
-    wavFile.write((byte*)&databits,2);
+    signedDatabits = databits - 32768;//16 bit WAV file stored as 16 bit signed 2s complement
+    wavFile.write((byte*)&signedDatabits,2);
     
    }
 
    //Serial.println("Entered recording");
 
-  GPIO7_DR_CLEAR = (1<<18);//clear record button bit
-  recordFuncClicked = (GPIO7_DR >> 18) & 1;
+  GPIO9_DR_CLEAR = (1<<5);//clear record button bit,
+  recordFuncClicked = (GPIO9_DR >> 5) & 1;
 
+  uint32_t startTime = millis();//just used for testing to see how many samples per second
   while(1){//check for another button press to end the recording 
   
 
-    GPIO7_DR_CLEAR = (1<<18);//clear record button bit
-    recordFuncClicked = (GPIO7_DR >> 18) & 1;
+    GPIO9_DR_CLEAR = (1<<5);//clear record button bit
+    recordFuncClicked = (GPIO9_DR >> 5) & 1;
     if(recordFuncClicked != recordFuncPrevClicked){
       break;
     }
@@ -524,13 +561,15 @@ void sampleRecord(){
       databits = Wire.read(); //inside while loop, check how many bytes in buffer?
       databits = databits << 8;
       databits |= Wire.read();
-      wavFile.write((byte*)&databits,2);
+      signedDatabits = databits - 32768;//2s complement of value adc output, 16 bit WAV file stored as 16 bit signed 2s complement
+      wavFile.write((byte*)&signedDatabits,2);
       convcount = convcount + 1;
-       recordFuncPrevClicked = recordFuncClicked;
+      recordFuncPrevClicked = recordFuncClicked;
 
       }
     }
   }
+  uint32_t endTime = millis();
 
   Wire.requestFrom(0b0110111, 32,true); //request 2 bytes (16 bits), if master generates a STOP condition, the ADC returns to F/S mode
   while(Wire.available() < 32); //check for all samples to be there, see if it reloads itself after running out of data, request read once?
@@ -538,12 +577,16 @@ void sampleRecord(){
     databits = Wire.read(); //inside while loop, check how many bytes in buffer?
     databits = databits << 8;
     databits |= Wire.read();
-    wavFile.println(databits);
-    wavFile.write((byte*)&databits,2);
+    //wavFile.println(databits);
+    signedDatabits = databits - 32768;//2s complement of value adc output, 16 bit WAV file stored as 16 bit signed 2s complement
+    wavFile.write((byte*)&signedDatabits,2);
     convcount = convcount + 1;
     }
 
-  //Serial.println("Existed recording");
+  
+  uint32_t timePassed = (endTime - startTime)/1000;
+  uint32_t sampels = convcount / timePassed;
+  //Serial.println(sampels);
 
   dataSize = wavFile.size();
   chunkSize = dataSize+36;
@@ -568,6 +611,8 @@ void sampleRecord(){
   wavFile.close();//close the wav file and end the wire
   Wire.end();
 
+  
+
   tft.fillScreen(ILI9341_BLACK); 
   tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);  // White on black
   tft.setTextWrap(true);  //  wrap text to next line
@@ -576,6 +621,8 @@ void sampleRecord(){
 
   tft.setCursor(0,0);//set point to top left 
   tft.println("Recording Complete!");
+  tft.println(fileName);
+  tft.println("created!");
   delay(2000);
   displayText();
 
